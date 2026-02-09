@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter7/data/repository.dart';
+import 'package:flutter7/ui/lesson_details_page.dart';
 import '../models/lesson.dart';
 
 class SchedulePage extends StatefulWidget {
@@ -231,71 +232,79 @@ class _SchedulePageState extends State<SchedulePage> {
               itemCount: lessons.length,
               itemBuilder: (context, i) {
                 final l = lessons[i];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ===== Номер пары / плейсхолдер =====
-                      SizedBox(
-                        width: 30,
-                        child: Center(
-                          child: Text(
-                            getLessonNumber(l.beginTime), // или порядковый номер пары
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                return GestureDetector(
+                  onTap: () {
+                    // открываем экран деталей пары
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => LessonDetailPage(lesson: l)),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 30,
+                          child: Center(
+                            child: Text(
+                              getLessonNumber(l.beginTime), // или порядковый номер пары
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
 
-                      // ===== Контент пары =====
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Время сверху
-                            Text(
-                              "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
-                                  "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade700,
-                                fontSize: 13,
+                        // ===== Контент пары =====
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Время сверху
+                              Text(
+                                "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
+                                    "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade700,
+                                  fontSize: 13,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
+                              const SizedBox(height: 4),
 
-                            // Название дисциплины
-                            Text(
-                              l.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            const SizedBox(height: 2),
-
-                            // Аудитория
-                            Text(
-                              "Ауд. ${l.room}",
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
+                              // Название дисциплины
+                              Text(
+                                l.title,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+
+                              // Аудитория
+                              Text(
+                                "Ауд. ${l.room}",
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },

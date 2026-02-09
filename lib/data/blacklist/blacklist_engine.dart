@@ -1,6 +1,5 @@
-import 'package:flutter7/data/blacklist_rule.dart';
-
-import 'json_path.dart';
+import 'package:flutter7/data/blacklist/blacklist_rule.dart';
+import 'package:flutter7/data/blacklist/json_path.dart';
 
 class BlacklistEngine {
   bool match(Map<String, dynamic> raw, BlacklistRule rule) {

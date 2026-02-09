@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter7/data/blacklist_rule.dart';
+import 'package:flutter7/data/blacklist/blacklist_rule.dart';
 import 'package:path_provider/path_provider.dart';
 
 class BlacklistStorage {

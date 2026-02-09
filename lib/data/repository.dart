@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter7/api/api_client.dart';
-import 'package:flutter7/data/blacklist_engine.dart';
-import 'package:flutter7/data/blacklist_repository.dart';
+import 'package:flutter7/data/blacklist/blacklist_engine.dart';
+import 'package:flutter7/data/blacklist/blacklist_repository.dart';
 import 'package:flutter7/data/file_cache.dart';
 import 'package:flutter7/models/cache.dart';
 import 'package:flutter7/models/lesson.dart';

@@ -1,6 +1,6 @@
-import 'package:flutter7/data/blacklist_rule.dart';
+import 'package:flutter7/data/blacklist/blacklist_rule.dart';
+import 'package:flutter7/data/blacklist/blacklist_storage.dart';
 import 'package:uuid/uuid.dart';
-import 'blacklist_storage.dart';
 
 class BlacklistRepository {
   final storage = BlacklistStorage();
