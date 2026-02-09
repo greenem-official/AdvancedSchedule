@@ -1,4 +1,7 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter7/api/api_client.dart';
+import 'package:flutter7/data/blacklist_engine.dart';
+import 'package:flutter7/data/blacklist_repository.dart';
 import 'package:flutter7/data/file_cache.dart';
 import 'package:flutter7/models/cache.dart';
 import 'package:flutter7/models/lesson.dart';
@@ -10,45 +13,58 @@ class ScheduleRepository {
   Future<List<Lesson>> getDay({
     required String groupId,
     required DateTime date,
+    required bool refresh,
   }) async {
     final cache = await storage.load(groupId);
-
     final key = date.toIso8601String().substring(0, 10);
 
-    // 1) если есть кеш и дата внутри диапазона
-    if (cache != null &&
-        date.isAfter(cache.start.subtract(const Duration(days: 1))) &&
-        date.isBefore(cache.end.add(const Duration(days: 1)))) {
-      return cache.days[key] ?? [];
+    bool needFetch = refresh || cache == null;
+
+    if (!needFetch && cache != null) {
+      final inRange =
+          !date.isBefore(cache.start) &&
+              !date.isAfter(cache.end);
+
+      needFetch = !inRange;
     }
 
-    // 2) иначе — грузим диапазон (например, неделю)
-    final start = date.subtract(const Duration(days: 3));
-    final end = date.add(const Duration(days: 3));
+    if (needFetch) {
+      // ⚠️ ВАЖНО: фиксированный диапазон, а не плавающий
+      final start = _normalizeDate(date.subtract(const Duration(days: 3)));
+      final end = _normalizeDate(date.add(const Duration(days: 3)));
 
-    final lessons = await api.fetchLessons(
-      groupId: groupId,
-      start: start,
-      end: end,
-    );
+      debugPrint("📦 Fetch range: $start - $end (refresh=$refresh)");
 
-    final days = <String, List<Lesson>>{};
+      final lessons = await api.fetchLessons(
+        groupId: groupId,
+        start: start,
+        end: end,
+      );
 
-    for (final l in lessons) {
-      final d = l.date.toIso8601String().substring(0, 10);
-      days.putIfAbsent(d, () => []).add(l);
+      final days = <String, List<Lesson>>{};
+
+      for (final l in lessons) {
+        final d = _key(l.date);
+        days.putIfAbsent(d, () => []).add(l);
+      }
+
+      final newCache = ScheduleCache(
+        groupId: groupId,
+        lastUpdated: DateTime.now(),
+        start: start,
+        end: end,
+        days: days,
+      );
+
+      await storage.save(newCache);
     }
 
-    final newCache = ScheduleCache(
-      groupId: groupId,
-      lastUpdated: DateTime.now(),
-      start: start,
-      end: end,
-      days: days,
-    );
-
-    await storage.save(newCache);
-
-    return days[key] ?? [];
+    final newCache = await storage.load(groupId);
+    return newCache?.days[key] ?? [];
   }
+
+  String _key(DateTime d) => d.toIso8601String().substring(0, 10);
+
+  DateTime _normalizeDate(DateTime d) =>
+      DateTime(d.year, d.month, d.day);
 }

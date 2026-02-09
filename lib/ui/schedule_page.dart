@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/timetable_repository.dart';
+import 'package:flutter7/data/repository.dart';
 import '../models/lesson.dart';
 
 class SchedulePage extends StatefulWidget {
@@ -10,45 +10,91 @@ class SchedulePage extends StatefulWidget {
 }
 
 class _SchedulePageState extends State<SchedulePage> {
-  final repo = TimetableRepository();
+  final repo = ScheduleRepository();
+
+  final String groupId = "154481"; // пока хардкод, потом вынесешь в настройки
 
   DateTime selectedDate = DateTime.now();
 
-  DateTime get weekStart {
-    final d = selectedDate;
-    return d.subtract(Duration(days: d.weekday - 1));
-  }
+  bool loading = false;
+  String? error;
 
-  List<DateTime> get weekDays =>
-      List.generate(7, (i) => weekStart.add(Duration(days: i)));
+  List<Lesson> lessons = [];
+
+  DateTime get weekStart => selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
+  List<DateTime> get weekDays => List.generate(7, (i) => weekStart.add(Duration(days: i)));
 
   @override
   void initState() {
     super.initState();
+    loadDay(selectedDate);
+  }
 
-    // demo data
-    repo.addLesson(
-      DateTime.now(),
-      Lesson(
-        title: "Мат. анализ",
-        room: "101",
-        time: DateTime.now().copyWith(hour: 9, minute: 0),
-      ),
-    );
-    repo.addLesson(
-      DateTime.now(),
-      Lesson(
-        title: "Физика",
-        room: "203",
-        time: DateTime.now().copyWith(hour: 10, minute: 40),
-      ),
-    );
+  Future<void> refreshWeek() async {
+    if (loading) return;
+
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final start = weekStart.subtract(const Duration(days: 3));
+      final end = weekStart.add(const Duration(days: 9));
+
+      await repo.getDay(
+        groupId: groupId,
+        date: selectedDate,
+        refresh: true,
+      );
+
+      await loadDay(selectedDate);
+    } catch (e, stack) {
+      debugPrint("Ошибка обновления недели: $e\n$stack");
+      setState(() => error = e.toString());
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> loadDay(DateTime day) async {
+    if (loading) return;
+
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final data = await repo.getDay(
+        groupId: groupId,
+        date: day,
+        refresh: false,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        lessons = data;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = e.toString();
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+      });
+    }
   }
 
   void changeWeek(int offset) {
     setState(() {
       selectedDate = selectedDate.add(Duration(days: offset * 7));
     });
+    loadDay(selectedDate);
   }
 
   Future<void> pickDate() async {
@@ -60,17 +106,21 @@ class _SchedulePageState extends State<SchedulePage> {
     );
     if (date != null) {
       setState(() => selectedDate = date);
+      loadDay(date);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final lessons = repo.getLessons(selectedDate);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Расписание"),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: "Обновить неделю",
+            onPressed: loading ? null : refreshWeek,
+          ),
           IconButton(
             icon: const Icon(Icons.calendar_month),
             onPressed: pickDate,
@@ -110,6 +160,22 @@ class _SchedulePageState extends State<SchedulePage> {
 
           const SizedBox(height: 10),
 
+          // ===== STATUS BAR =====
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: LinearProgressIndicator(),
+            ),
+
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                "Ошибка: $error",
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+
           // ===== LESSONS LIST =====
           Expanded(
             child: lessons.isEmpty
@@ -138,10 +204,8 @@ class _SchedulePageState extends State<SchedulePage> {
                       SizedBox(
                         width: 60,
                         child: Text(
-                          "${l.time.hour.toString().padLeft(2, '0')}:${l.time.minute.toString().padLeft(2, '0')}",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')}",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -151,9 +215,7 @@ class _SchedulePageState extends State<SchedulePage> {
                           children: [
                             Text(
                               l.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -184,13 +246,13 @@ class _SchedulePageState extends State<SchedulePage> {
       ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        child: const Icon(Icons.add),
+        onPressed: refreshWeek, // пока пусть обновляет неделю
+        child: const Icon(Icons.sync),
       ),
     );
   }
 
-  // ===== WEEK STRIP WIDGET =====
+  // ===== WEEK STRIP =====
   Widget buildWeekStrip() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -211,7 +273,10 @@ class _SchedulePageState extends State<SchedulePage> {
 
                 return Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => selectedDate = date),
+                    onTap: () {
+                      setState(() => selectedDate = date);
+                      loadDay(date);
+                    },
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       padding: const EdgeInsets.symmetric(vertical: 8),
