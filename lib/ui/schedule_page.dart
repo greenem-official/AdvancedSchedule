@@ -110,6 +110,53 @@ class _SchedulePageState extends State<SchedulePage> {
     }
   }
 
+  String formatWeekRange(DateTime start) {
+    final end = start.add(const Duration(days: 6));
+
+    String monthName(int month) {
+      const names = [
+        '', // индекс 0
+        'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+        'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+      ];
+      return names[month];
+    }
+
+    if (start.month == end.month) {
+      // один месяц
+      return "${start.day}–${end.day} ${monthName(start.month)}";
+    } else {
+      // разные месяцы
+      return "${start.day} ${monthName(start.month)} – ${end.day} ${monthName(end.month)}";
+    }
+  }
+
+  String getLessonNumber(DateTime beginTime) {
+    // эталонные времена начала пар
+    final lessonTimes = [
+      const Duration(hours: 8, minutes: 30),
+      const Duration(hours: 10, minutes: 10),
+      const Duration(hours: 11, minutes: 50),
+      const Duration(hours: 14, minutes: 0),
+      const Duration(hours: 15, minutes: 40),
+      const Duration(hours: 17, minutes: 20),
+      const Duration(hours: 18, minutes: 55),
+      const Duration(hours: 20, minutes: 30),
+    ];
+
+    final t = Duration(hours: beginTime.hour, minutes: beginTime.minute);
+
+    for (int i = 0; i < lessonTimes.length; i++) {
+      if (t == lessonTimes[i]) return "$i";
+      if (i > 0 && t > lessonTimes[i - 1] && t < lessonTimes[i]) {
+        return "${i - 1}*"; // между предыдущей и текущей
+      }
+    }
+
+    if (t < lessonTimes[0]) return "0*"; // до первой пары
+    return "${lessonTimes.length - 1}*"; // после последней пары
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -141,8 +188,7 @@ class _SchedulePageState extends State<SchedulePage> {
                   onPressed: () => changeWeek(-1),
                 ),
                 Text(
-                  "${weekStart.day}.${weekStart.month} — "
-                      "${weekStart.add(const Duration(days: 6)).day}.${weekStart.month}",
+                  formatWeekRange(weekStart),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 IconButton(
@@ -200,24 +246,45 @@ class _SchedulePageState extends State<SchedulePage> {
                     ],
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ===== Номер пары / плейсхолдер =====
                       SizedBox(
-                        width: 60,
-                        child: Text(
-                          "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')}",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        width: 30,
+                        child: Center(
+                          child: Text(
+                            getLessonNumber(l.beginTime), // или порядковый номер пары
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
+
+                      // ===== Контент пары =====
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Время сверху
                             Text(
-                              l.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
+                                  "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade700,
+                                fontSize: 13,
+                              ),
                             ),
                             const SizedBox(height: 4),
+
+                            // Название дисциплины
+                            Text(
+                              l.title,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            const SizedBox(height: 2),
+
+                            // Аудитория
                             Text(
                               "Ауд. ${l.room}",
                               style: TextStyle(

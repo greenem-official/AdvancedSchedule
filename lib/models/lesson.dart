@@ -1,12 +1,10 @@
-import 'package:flutter/cupertino.dart';
-
 class Lesson {
   final int id;
   final DateTime date;
   final DateTime beginTime;
   final DateTime endTime;
-  final String title;
-  final String room;
+  late final String title;
+  late final String room;
   final Map<String, dynamic> raw;
 
   Lesson({
@@ -14,10 +12,10 @@ class Lesson {
     required this.date,
     required this.beginTime,
     required this.endTime,
-    required this.title,
-    required this.room,
     required this.raw,
-  });
+  }) {
+    _populateExtraFields();
+  }
 
   /// Разбор с API
   factory Lesson.fromApi(Map<String, dynamic> json) {
@@ -33,62 +31,52 @@ class Lesson {
       return DateTime(date.year, date.month, date.day, hour, minute);
     }
 
-    // название дисциплины
-    final discipline = json['discipline'];
-    String title = 'Без названия';
-    if (discipline != null) {
-      if (discipline is String) {
-        title = discipline;
-      } else if (discipline is Map<String, dynamic>) {
-        title = discipline['name']?.toString() ?? 'Без названия';
-      }
-    }
-
-    // аудитория
-    final room = json['auditorium']?.toString() ?? '—';
-
     return Lesson(
       id: json['lessonOid'] ?? 0,
       date: date,
       beginTime: parseTime(json['beginLesson']),
       endTime: parseTime(json['endLesson']),
-      title: title,
-      room: room,
       raw: json,
     );
   }
 
-  /// Разбор из сохранённого JSON (например, локальный storage)
+  /// Разбор из локального JSON
   factory Lesson.fromJson(Map<String, dynamic> json) {
-    try {
-      final raw = Map<String, dynamic>.from(json['raw'] ?? {});
+    final raw = Map<String, dynamic>.from(json['raw'] ?? {});
 
-      DateTime parseTimeField(dynamic field, [DateTime? fallback]) {
-        final effectiveFallback = fallback ?? DateTime.now();
-
-        if (field == null) return effectiveFallback;
-        if (field is DateTime) return field;
-        if (field is String) return DateTime.tryParse(field) ?? effectiveFallback;
-        return effectiveFallback;
-      }
-
-      final discipline = raw['discipline'];
-      final aud = raw['auditorium'];
-
-      return Lesson(
-        id: json['id'] ?? 0,
-        date: parseTimeField(json['date']),
-        beginTime: parseTimeField(json['beginTime'], parseTimeField(raw['beginLesson'])),
-        endTime: parseTimeField(json['endTime'], parseTimeField(raw['endLesson'])),
-        title: (discipline is Map) ? (discipline['name']?.toString() ?? 'Без названия') : 'Без названия',
-        room: aud?.toString() ?? '—',
-        raw: raw,
-      );
-    } catch (e, stack) {
-      debugPrint("Ошибка при разборе Lesson.fromJson: $e\nСтек:\n$stack");
-      debugPrint("JSON snippet: id=${json['id']}, date=${json['date']}, discipline=${json['raw']?['discipline']}, auditorium=${json['raw']?['auditorium']}");
-      rethrow;
+    DateTime parseTimeField(dynamic field, [DateTime? fallback]) {
+      final effectiveFallback = fallback ?? DateTime.now();
+      if (field == null) return effectiveFallback;
+      if (field is DateTime) return field;
+      if (field is String) return DateTime.tryParse(field) ?? effectiveFallback;
+      return effectiveFallback;
     }
+
+    return Lesson(
+      id: json['id'] ?? 0,
+      date: parseTimeField(json['date']),
+      beginTime: parseTimeField(json['beginTime'], parseTimeField(raw['beginLesson'])),
+      endTime: parseTimeField(json['endTime'], parseTimeField(raw['endLesson'])),
+      raw: raw,
+    );
+  }
+
+  /// Общий метод для заполнения остальных полей
+  void _populateExtraFields() {
+    // title
+    final discipline = raw['discipline'];
+    if (discipline == null) {
+      title = 'Без названия';
+    } else if (discipline is String) {
+      title = discipline;
+    } else if (discipline is Map<String, dynamic>) {
+      title = discipline['name']?.toString() ?? 'Без названия';
+    } else {
+      title = 'Без названия';
+    }
+
+    // room
+    room = raw['auditorium']?.toString() ?? '—';
   }
 
   Map<String, dynamic> toJson() => {
@@ -101,7 +89,6 @@ class Lesson {
     'raw': raw,
   };
 
-  /// Debug
   @override
   String toString() =>
       'Lesson(id: $id, title: $title, room: $room, date: $date, begin: $beginTime, end: $endTime)';
