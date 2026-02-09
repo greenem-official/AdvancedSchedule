@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter7/data/blacklist/blacklist_engine.dart';
+import 'package:flutter7/data/blacklist/blacklist_repository.dart';
+import 'package:flutter7/data/blacklist/blacklist_rule.dart';
 import 'package:flutter7/data/repository.dart';
+import 'package:flutter7/ui/blacklist_page.dart';
 import 'package:flutter7/ui/lesson_details_page.dart';
 import '../models/lesson.dart';
 
-class SchedulePage extends StatefulWidget {
-  const SchedulePage({super.key});
+class SchedulePageContent extends StatefulWidget {
+  final ScheduleRepository repo;
+  final BlacklistRepository blacklistRepo;
+
+  const SchedulePageContent({
+    super.key,
+    required this.repo,
+    required this.blacklistRepo,
+  });
 
   @override
-  State<SchedulePage> createState() => _SchedulePageState();
+  State<SchedulePageContent> createState() => _SchedulePageContentState();
 }
 
-class _SchedulePageState extends State<SchedulePage> {
-  final repo = ScheduleRepository();
 
-  final String groupId = "154481"; // пока хардкод, потом вынесешь в настройки
-
+class _SchedulePageContentState extends State<SchedulePageContent> {
+  final String groupId = "154481"; // хардкод, потом настройки
   DateTime selectedDate = DateTime.now();
 
   bool loading = false;
   String? error;
-
   List<Lesson> lessons = [];
 
   DateTime get weekStart => selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
@@ -30,6 +38,11 @@ class _SchedulePageState extends State<SchedulePage> {
     super.initState();
     loadDay(selectedDate);
   }
+
+  // Future<void> loadBlacklist() async {
+  //   blacklistRules = await blacklistRepo.getAll();
+  //   setState(() {}); // чтобы перерисовать карточки с кнопками
+  // }
 
   Future<void> refreshWeek() async {
     if (loading) return;
@@ -43,7 +56,7 @@ class _SchedulePageState extends State<SchedulePage> {
       final start = weekStart.subtract(const Duration(days: 3));
       final end = weekStart.add(const Duration(days: 9));
 
-      await repo.getDay(
+      await widget.repo.getDay(
         groupId: groupId,
         date: selectedDate,
         refresh: true,
@@ -67,7 +80,7 @@ class _SchedulePageState extends State<SchedulePage> {
     });
 
     try {
-      final data = await repo.getDay(
+      final data = await widget.repo.getDay(
         groupId: groupId,
         date: day,
         refresh: false,
@@ -237,7 +250,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     // открываем экран деталей пары
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => LessonDetailPage(lesson: l)),
+                      MaterialPageRoute(builder: (_) => LessonDetailPage(lesson: l, blacklistRepo: widget.blacklistRepo)),
                     );
                   },
                   child: Container(
@@ -310,14 +323,6 @@ class _SchedulePageState extends State<SchedulePage> {
               },
             ),
           ),
-        ],
-      ),
-
-      bottomNavigationBar: BottomNavigationBar(
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: ""),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: ""),
         ],
       ),
 

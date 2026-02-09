@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter7/ui/main_screen.dart';
 import 'ui/schedule_page.dart';
 
 void main() {
@@ -15,11 +16,10 @@ class App extends StatelessWidget {
       title: 'Schedule App',
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
-      home: const SchedulePage(),
+      home: const MainScreen(), // теперь mainScreen содержит nav и репозитории
     );
   }
 }
+
