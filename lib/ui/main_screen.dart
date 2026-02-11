@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter7/data/blacklist/blacklist_repository.dart';
+import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/repository.dart';
-import 'package:flutter7/ui/blacklist_page.dart';
+import 'package:flutter7/ui/categories_page.dart';
 import 'package:flutter7/ui/schedule_page.dart';
 
 class MainScreen extends StatefulWidget {
@@ -16,7 +16,16 @@ class _MainScreenState extends State<MainScreen> {
 
   // Репозитории создаём один раз
   final ScheduleRepository repo = ScheduleRepository();
-  final BlacklistRepository blacklistRepo = BlacklistRepository();
+  final CategoryRepository categoryRepo = CategoryRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      await categoryRepo.addCategory(title: "blacklist");
+      setState(() {});
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,10 +34,10 @@ class _MainScreenState extends State<MainScreen> {
         case 0:
           return SchedulePageContent(
             repo: repo,
-            blacklistRepo: blacklistRepo,
+            categoryRepo: categoryRepo,
           ); // здесь чистый контент
         case 1:
-          return BlacklistPage(blacklistRepo: blacklistRepo);
+          return CategoriesPage(categoryRepo: categoryRepo);
       // case 2:
       //   return SettingsPage();
         default:
@@ -47,7 +56,7 @@ class _MainScreenState extends State<MainScreen> {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: "Расписание"),
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: "Блеклист"),
+          BottomNavigationBarItem(icon: Icon(Icons.group), label: "Категории"),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: "Настройки"),
         ],
       ),

@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter7/data/blacklist/blacklist_engine.dart';
-import 'package:flutter7/data/blacklist/blacklist_repository.dart';
-import 'package:flutter7/data/blacklist/blacklist_rule.dart';
+import 'package:flutter7/data/blacklist/category_engine.dart';
+import 'package:flutter7/data/blacklist/category_repository.dart';
+import 'package:flutter7/data/blacklist/categories.dart';
 import 'package:flutter7/data/blacklist/json_path.dart';
 import '../models/lesson.dart';
 
 class LessonDetailPage extends StatefulWidget {
   final Lesson lesson;
-  final BlacklistRepository blacklistRepo;
+  final CategoryRepository categoryRepo;
+  final List<FieldDef> fieldDefs; // заранее подготовленные поля
 
   const LessonDetailPage({
     super.key,
     required this.lesson,
-    required this.blacklistRepo,
+    required this.categoryRepo,
+    required this.fieldDefs,
   });
 
   @override
@@ -20,78 +22,86 @@ class LessonDetailPage extends StatefulWidget {
 }
 
 class _LessonDetailPageState extends State<LessonDetailPage> {
-  List<BlacklistRule> blacklistRules = [];
-  final engine = BlacklistEngine();
-
-  @override
-  void initState() {
-    super.initState();
-    loadRules();
-  }
-
-  Future<void> loadRules() async {
-    blacklistRules = await widget.blacklistRepo.getAll();
-    setState(() {});
-  }
+  final engine = CategoryEngine();
 
   @override
   Widget build(BuildContext context) {
-    final blacklistFields = [
-      {"label": "Дисциплина", "path": "discipline"},
-      {"label": "Группа", "path": "groupGUID"},
-    ];
-
     return Scaffold(
       appBar: AppBar(title: Text(widget.lesson.title)),
       body: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // например, показываем базовые поля
-            Text("Аудитория: ${widget.lesson.room}"),
-            const SizedBox(height: 10),
-            Text("Время: ${widget.lesson.beginTime} — ${widget.lesson.endTime}"),
-            const SizedBox(height: 20),
+        child: ListView(
+          children: widget.fieldDefs.map((f) {
+            final raw = widget.lesson.raw;
+            final uniqueValue = getByPath(raw, f.uniquePath)?.toString() ?? "—";
+            final displayValue = getByPath(raw, f.displayPath)?.toString() ?? "—";
 
-            // кнопки блеклиста
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: blacklistFields.map((f) {
-                final value = getByPath(widget.lesson.raw, f['path']!);
-                final alreadyBlacklisted = blacklistRules.any(
-                      (rule) => rule.path == f['path'] && rule.value == value?.toString(),
-                );
-
-                return ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: alreadyBlacklisted ? Colors.grey : Colors.red.shade300,
-                  ),
-                  onPressed: value == null || alreadyBlacklisted
-                      ? null
-                      : () async {
-                    await widget.blacklistRepo.addRule(
-                      path: f['path']!,
-                      op: BlacklistOp.equals,
-                      value: value.toString(),
-                    );
-
-                    // обновляем кэш
-                    blacklistRules = await widget.blacklistRepo.getAll();
-                    setState(() {});
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${f['label']} добавлено в блеклист')),
-                    );
-                  },
-                  child: Text(f['label']!),
-                );
-              }).toList(),
-            ),
-          ],
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(f.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(displayValue, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text(uniqueValue, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddToCategory(f, uniqueValue, displayValue),
+                      icon: const Icon(Icons.add),
+                      label: const Text("Добавить в категорию"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade300,
+                        minimumSize: const Size.fromHeight(36),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
+    );
+  }
+
+  void _showAddToCategory(FieldDef field, String uniqueValue, String displayValue) async {
+    // Получаем все категории
+    final categories = await widget.categoryRepo.getAllCategories();
+
+    // Показать меню выбора категории
+    final selectedCategoryId = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) {
+        return ListView(
+          shrinkWrap: true,
+          children: categories.map((c) {
+            return ListTile(
+              title: Text(c.title == "blacklist" ? "Чёрный список" : c.title),
+              onTap: () => Navigator.of(ctx).pop(c.id),
+            );
+          }).toList(),
+        );
+      },
+    );
+
+    if (selectedCategoryId == null) return;
+
+    // Добавляем правило в выбранную категорию
+    await widget.categoryRepo.addRule(
+      categoryId: selectedCategoryId,
+      fieldId: field.id,
+      op: CategoryOp.equals,
+      unique: JsonEntry(path: field.uniquePath, value: uniqueValue),
+      display: JsonEntry(path: field.displayPath, value: displayValue),
+    );
+
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${field.title} добавлено в категорию')),
     );
   }
 }

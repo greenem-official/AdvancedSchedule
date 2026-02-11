@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter7/data/blacklist/blacklist_engine.dart';
-import 'package:flutter7/data/blacklist/blacklist_repository.dart';
-import 'package:flutter7/data/blacklist/blacklist_rule.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:flutter7/data/blacklist/category_engine.dart';
+import 'package:flutter7/data/blacklist/category_repository.dart';
+import 'package:flutter7/data/blacklist/categories.dart';
 import 'package:flutter7/data/repository.dart';
-import 'package:flutter7/ui/blacklist_page.dart';
+import 'package:flutter7/ui/categories_page.dart';
 import 'package:flutter7/ui/lesson_details_page.dart';
 import '../models/lesson.dart';
 
 class SchedulePageContent extends StatefulWidget {
   final ScheduleRepository repo;
-  final BlacklistRepository blacklistRepo;
+  final CategoryRepository categoryRepo;
 
   const SchedulePageContent({
     super.key,
     required this.repo,
-    required this.blacklistRepo,
+    required this.categoryRepo,
   });
 
   @override
@@ -23,6 +24,8 @@ class SchedulePageContent extends StatefulWidget {
 
 
 class _SchedulePageContentState extends State<SchedulePageContent> {
+  final categoryEngine = CategoryEngine();
+
   final String groupId = "154481"; // хардкод, потом настройки
   DateTime selectedDate = DateTime.now();
 
@@ -32,6 +35,9 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
   DateTime get weekStart => selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
   List<DateTime> get weekDays => List.generate(7, (i) => weekStart.add(Duration(days: i)));
+
+  bool showBlacklisted = false;
+  bool fabOpen = false;
 
   @override
   void initState() {
@@ -91,6 +97,10 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
       setState(() {
         lessons = data;
       });
+
+      // Обновляем фильтр уже после того, как lessons обновились
+      await updateFilteredLessons();
+
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -171,6 +181,27 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     return "${lessonTimes.length - 1}*"; // после последней пары
   }
 
+  Future<bool> checkLessonBlacklisted(Lesson l) async {
+    bool result = categoryEngine.matchCategory(l.raw, (await widget.categoryRepo.getCategoryByTitleAsync("blacklist"))!);
+    // debugPrint("${l.title} blacklisted: ${result}");
+    return result;
+  }
+
+  List<Lesson> filteredLessons = [];
+
+  Future<void> updateFilteredLessons() async {
+    if (showBlacklisted) {
+      filteredLessons = List.from(lessons);
+    } else {
+      final results = await Future.wait(
+        lessons.map((l) async => (await checkLessonBlacklisted(l)) ? null : l),
+      );
+      filteredLessons = results.whereType<Lesson>().toList();
+    }
+    setState(() {});
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -238,19 +269,24 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
           // ===== LESSONS LIST =====
           Expanded(
-            child: lessons.isEmpty
+            child: filteredLessons.isEmpty
                 ? const Center(child: Text("Нет занятий"))
                 : ListView.builder(
               padding: const EdgeInsets.all(12),
-              itemCount: lessons.length,
+              itemCount: filteredLessons.length,
               itemBuilder: (context, i) {
-                final l = lessons[i];
+                final l = filteredLessons[i];
                 return GestureDetector(
                   onTap: () {
-                    // открываем экран деталей пары
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => LessonDetailPage(lesson: l, blacklistRepo: widget.blacklistRepo)),
+                      MaterialPageRoute(
+                        builder: (_) => LessonDetailPage(
+                          lesson: l,
+                          categoryRepo: widget.categoryRepo,
+                          fieldDefs: fieldDefs,
+                        ),
+                      ),
                     );
                   },
                   child: Container(
@@ -274,19 +310,17 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
                           width: 30,
                           child: Center(
                             child: Text(
-                              getLessonNumber(l.beginTime), // или порядковый номер пары
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              getLessonNumber(l.beginTime),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-
-                        // ===== Контент пары =====
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Время сверху
                               Text(
                                 "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
                                     "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
@@ -297,15 +331,12 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-
-                              // Название дисциплины
                               Text(
                                 l.title,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15),
                               ),
                               const SizedBox(height: 2),
-
-                              // Аудитория
                               Text(
                                 "Ауд. ${l.room}",
                                 style: TextStyle(
@@ -326,10 +357,44 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
         ],
       ),
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: refreshWeek, // пока пусть обновляет неделю
-        child: const Icon(Icons.sync),
-      ),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (fabOpen) ...[
+              FloatingActionButton.small(
+                heroTag: "fabBlacklist",
+                onPressed: () {
+                  setState(() {
+                    showBlacklisted = !showBlacklisted;
+                  });
+                  updateFilteredLessons();
+                },
+                child: Icon(
+                  showBlacklisted ? Icons.visibility : Icons.visibility_off,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              FloatingActionButton.small(
+                heroTag: "fabSync",
+                onPressed: refreshWeek,
+                child: const Icon(Icons.sync),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            FloatingActionButton(
+              heroTag: "fabMore",
+              onPressed: () {
+                setState(() {
+                  fabOpen = !fabOpen;
+                });
+              },
+              child: Icon(fabOpen ? Icons.close : Icons.more_vert),
+            ),
+          ],
+        ),
     );
   }
 
@@ -355,7 +420,7 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
                 return Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      setState(() => selectedDate = date);
+                      selectedDate = date;
                       loadDay(date);
                     },
                     child: Container(
