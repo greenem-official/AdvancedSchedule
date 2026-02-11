@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter7/ui/main_screen.dart';
-import 'ui/schedule_page.dart';
 
 void main() {
   runApp(const App());

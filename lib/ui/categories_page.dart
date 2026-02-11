@@ -49,7 +49,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
           Container(
             width: 220,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
               border: Border(
                 right: BorderSide(color: Colors.grey.withOpacity(0.2)),
               ),
@@ -118,7 +118,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
 Map<String, List<CategoryRule>> groupRulesByField(List<CategoryRule> rules) {
   final map = <String, List<CategoryRule>>{};
   for (final r in rules) {
-    final key = '${r.fieldId}';
+    final key = r.fieldId;
     map.putIfAbsent(key, () => []).add(r);
   }
   return map;

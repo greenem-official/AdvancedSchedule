@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:flutter7/data/blacklist/category_engine.dart';
 import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/blacklist/categories.dart';
 import 'package:flutter7/data/repository.dart';
-import 'package:flutter7/ui/categories_page.dart';
 import 'package:flutter7/ui/lesson_details_page.dart';
 import '../models/lesson.dart';
 

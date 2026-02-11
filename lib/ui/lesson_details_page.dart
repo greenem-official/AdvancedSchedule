@@ -33,31 +33,58 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
         child: ListView(
           children: widget.fieldDefs.map((f) {
             final raw = widget.lesson.raw;
-            final uniqueValue = getByPath(raw, f.uniquePath)?.toString() ?? "—";
-            final displayValue = getByPath(raw, f.displayPath)?.toString() ?? "—";
+            final uniqueValue = getByPath(raw, f.uniquePath)?.toString();
+            final displayValue = getByPath(raw, f.displayPath)?.toString();
+
+            // Если нет display и unique, пропускаем
+            if ((uniqueValue == null || uniqueValue.isEmpty) &&
+                (displayValue == null || displayValue.isEmpty)) {
+              return const SizedBox.shrink();
+            }
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 3,
               child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(f.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(height: 4),
-                    Text(displayValue, style: const TextStyle(fontSize: 16)),
-                    const SizedBox(height: 2),
-                    Text(uniqueValue, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: () => _showAddToCategory(f, uniqueValue, displayValue),
-                      icon: const Icon(Icons.add),
-                      label: const Text("Добавить в категорию"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade300,
-                        minimumSize: const Size.fromHeight(36),
+                    // ===== Info =====
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(f.title,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14)),
+                          if (displayValue != null && displayValue.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(displayValue,
+                                style: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w500)),
+                          ],
+                          if (uniqueValue != null && uniqueValue.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(uniqueValue,
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          ],
+                        ],
                       ),
                     ),
+
+                    // ===== Add button =====
+                    if ((uniqueValue != null && uniqueValue.isNotEmpty) ||
+                        (displayValue != null && displayValue.isNotEmpty))
+                      Material(
+                        color: Colors.transparent,
+                        child: IconButton(
+                          onPressed: () => _showAddToCategory(f, uniqueValue ?? "", displayValue ?? ""),
+                          icon: Icon(Icons.add_circle, color: Colors.blue.shade400, size: 28),
+                          tooltip: "Добавить в категорию",
+                        ),
+                      ),
                   ],
                 ),
               ),
