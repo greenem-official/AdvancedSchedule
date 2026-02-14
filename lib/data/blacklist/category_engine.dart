@@ -1,5 +1,6 @@
 import 'package:flutter7/data/blacklist/categories.dart';
 import 'package:flutter7/data/blacklist/json_path.dart';
+import 'package:flutter7/data/constants.dart';
 
 class CategoryEngine {
   bool match(Map<String, dynamic> raw, CategoryRule rule) {

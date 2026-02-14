@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter7/data/blacklist/category_engine.dart';
 import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/blacklist/categories.dart';
+import 'package:flutter7/data/constants.dart';
 import 'package:flutter7/data/repository.dart';
 import 'package:flutter7/ui/lesson_details_page.dart';
 import '../models/lesson.dart';
@@ -199,7 +200,6 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     setState(() {});
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -319,14 +319,34 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
-                                    "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade700,
-                                  fontSize: 13,
-                                ),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: l.lessonType.color, // мягкий цвет
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      l.lessonType.displayName, // без const!
+                                      style: const TextStyle(
+                                        color: Color(0xFFFFFFFF), // белый текст
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
+                                        "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1565C0), // тёмно-синий
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Text(

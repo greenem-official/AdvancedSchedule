@@ -1,3 +1,21 @@
+import 'dart:ui';
+
+import 'package:flutter7/data/constants.dart';
+
+class LessonType {
+  final String internalName;
+  final String displayName;
+  final int typeOid;
+  final Color color;
+
+  const LessonType({
+    required this.internalName,
+    required this.displayName,
+    required this.typeOid,
+    required this.color,
+  });
+}
+
 class Lesson {
   final int id;
   final DateTime date;
@@ -5,6 +23,7 @@ class Lesson {
   final DateTime endTime;
   late final String title;
   late final String room;
+  late final LessonType lessonType;
   final Map<String, dynamic> raw;
 
   Lesson({
@@ -77,6 +96,8 @@ class Lesson {
 
     // room
     room = raw['auditorium']?.toString() ?? '—';
+
+    lessonType = lessonTypeMapById[raw['kindOfWorkOid']]!;
   }
 
   Map<String, dynamic> toJson() => {

@@ -6,7 +6,11 @@ import 'package:path_provider/path_provider.dart';
 class ScheduleStorage {
   Future<File> _file(String groupId) async {
     final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/schedule_group_$groupId.json');
+    final folder = Directory('${dir.path}/AdvancedSchedule');
+    if (!await folder.exists()) {
+      await folder.create(recursive: true);
+    }
+    return File('${folder.path}/schedule_group_$groupId.json');
   }
 
   Future<ScheduleCache?> load(String groupId) async {
