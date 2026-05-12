@@ -3,6 +3,7 @@ import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/repository.dart';
 import 'package:flutter7/ui/categories_page.dart';
 import 'package:flutter7/ui/schedule_page.dart';
+import 'package:flutter7/ui/settings_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,6 +19,8 @@ class _MainScreenState extends State<MainScreen> {
   final ScheduleRepository repo = ScheduleRepository();
   final CategoryRepository categoryRepo = CategoryRepository();
 
+  String currentGroupId = "154481";
+
   @override
   void initState() {
     super.initState();
@@ -29,31 +32,29 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget getCurrentPage() {
-      switch (_currentIndex) {
-        case 0:
-          return SchedulePageContent(
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          // ✅ SchedulePageContent теперь переиспользуемый
+          SchedulePageContent(
             repo: repo,
             categoryRepo: categoryRepo,
-          ); // здесь чистый контент
-        case 1:
-          return CategoriesPage(categoryRepo: categoryRepo);
-      // case 2:
-      //   return SettingsPage();
-        default:
-          return const SizedBox();
-      }
-    }
-
-    return Scaffold(
-      body: getCurrentPage(),
+            groupId: currentGroupId,
+            title: "Расписание группы $currentGroupId",
+          ),
+          CategoriesPage(categoryRepo: categoryRepo),
+          SettingsPage(
+            // groupId: currentGroupId,
+            // onGroupChanged: (newGroupId) {
+            //   setState(() => currentGroupId = newGroupId);
+            // },
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: "Расписание"),
           BottomNavigationBarItem(icon: Icon(Icons.group), label: "Категории"),

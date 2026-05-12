@@ -10,11 +10,17 @@ import '../models/lesson.dart';
 class SchedulePageContent extends StatefulWidget {
   final ScheduleRepository repo;
   final CategoryRepository categoryRepo;
+  final String groupId; // передаём извне
+  final String? title; // опциональный заголовок
+  final bool showAppBar; // для встраивания без AppBar
 
   const SchedulePageContent({
     super.key,
     required this.repo,
     required this.categoryRepo,
+    required this.groupId,
+    this.title,
+    this.showAppBar = true,
   });
 
   @override
@@ -25,7 +31,7 @@ class SchedulePageContent extends StatefulWidget {
 class _SchedulePageContentState extends State<SchedulePageContent> {
   final categoryEngine = CategoryEngine();
 
-  final String groupId = "154481"; // хардкод, потом настройки
+  String get groupId => widget.groupId;
   DateTime selectedDate = DateTime.now();
 
   bool loading = false;
@@ -42,6 +48,14 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
   void initState() {
     super.initState();
     loadDay(selectedDate);
+  }
+
+  @override
+  void didUpdateWidget(SchedulePageContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.groupId != widget.groupId) {
+      loadDay(selectedDate);
+    }
   }
 
   // Future<void> loadBlacklist() async {
