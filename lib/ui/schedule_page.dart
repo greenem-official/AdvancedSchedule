@@ -4,6 +4,7 @@ import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/blacklist/categories.dart';
 import 'package:flutter7/data/constants.dart';
 import 'package:flutter7/data/repository.dart';
+import 'package:flutter7/data/smart_cache_manager.dart';
 import 'package:flutter7/ui/lesson_details_page.dart';
 import '../models/lesson.dart';
 
@@ -30,6 +31,7 @@ class SchedulePageContent extends StatefulWidget {
 
 class _SchedulePageContentState extends State<SchedulePageContent> {
   final categoryEngine = CategoryEngine();
+  late final SmartCacheManager cacheManager;
 
   String get groupId => widget.groupId;
   DateTime selectedDate = DateTime.now();
@@ -47,6 +49,7 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
   @override
   void initState() {
     super.initState();
+    // cacheManager = SmartCacheManager(repo: widget.repo);
     loadDay(selectedDate);
   }
 
@@ -72,9 +75,7 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     });
 
     try {
-      final start = weekStart.subtract(const Duration(days: 3));
-      final end = weekStart.add(const Duration(days: 9));
-
+      // один вызов с force=true
       await widget.repo.getDay(
         groupId: groupId,
         date: selectedDate,
@@ -83,7 +84,7 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
       await loadDay(selectedDate);
     } catch (e, stack) {
-      debugPrint("Ошибка обновления недели: $e\n$stack");
+      debugPrint("Ошибка обновления: $e\n$stack");
       setState(() => error = e.toString());
     } finally {
       setState(() => loading = false);
@@ -96,9 +97,11 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     setState(() {
       loading = true;
       error = null;
+      selectedDate = day; // сразу обновляем дату
     });
 
     try {
+      // один вызов, который сам решит нужна ли загрузка
       final data = await widget.repo.getDay(
         groupId: groupId,
         date: day,
@@ -111,12 +114,12 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
         lessons = data;
       });
 
-      // Обновляем фильтр уже после того, как lessons обновились
       await updateFilteredLessons();
 
-    } catch (e) {
+    } catch (e, stack) {
       if (!mounted) return;
       setState(() {
+        debugPrint("Ошибка загрузки дня: $e\n$stack");
         error = e.toString();
       });
     } finally {
@@ -127,11 +130,14 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     }
   }
 
+  void changeDay(int offset) {
+    final newDate = selectedDate.add(Duration(days: offset));
+    loadDay(newDate);
+  }
+
   void changeWeek(int offset) {
-    setState(() {
-      selectedDate = selectedDate.add(Duration(days: offset * 7));
-    });
-    loadDay(selectedDate);
+    final newDate = selectedDate.add(Duration(days: offset * 7));
+    loadDay(newDate);
   }
 
   Future<void> pickDate() async {
@@ -214,11 +220,12 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     setState(() {});
   }
 
+  // schedule_page.dart - метод build
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Расписание"),
+      appBar: widget.showAppBar ? AppBar(
+        title: Text(widget.title ?? "Расписание"),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -230,203 +237,217 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
             onPressed: pickDate,
           ),
         ],
-      ),
+      ) : null,
 
-      body: Column(
-        children: [
-          // ===== WEEK HEADER =====
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => changeWeek(-1),
-                ),
-                Text(
-                  formatWeekRange(weekStart),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => changeWeek(1),
-                ),
-              ],
-            ),
-          ),
+      // Оборачиваем ВЕСЬ body в GestureDetector для свайпов
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity == null) return;
 
-          const SizedBox(height: 6),
-
-          // ===== DAYS STRIP =====
-          buildWeekStrip(),
-
-          const SizedBox(height: 10),
-
-          // ===== STATUS BAR =====
-          if (loading)
-            const Padding(
-              padding: EdgeInsets.all(8),
-              child: LinearProgressIndicator(),
-            ),
-
-          if (error != null)
+          if (details.primaryVelocity! > 100) {
+            // Свайп вправо - предыдущий день
+            changeDay(-1);
+          } else if (details.primaryVelocity! < -100) {
+            // Свайп влево - следующий день
+            changeDay(1);
+          }
+        },
+        child: Column(
+          children: [
+            // ===== WEEK HEADER =====
             Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                "Ошибка: $error",
-                style: const TextStyle(color: Colors.red),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: () => changeWeek(-1),
+                  ),
+                  Text(
+                    formatWeekRange(weekStart),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: () => changeWeek(1),
+                  ),
+                ],
               ),
             ),
 
-          // ===== LESSONS LIST =====
-          Expanded(
-            child: filteredLessons.isEmpty
-                ? const Center(child: Text("Нет занятий"))
-                : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: filteredLessons.length,
-              itemBuilder: (context, i) {
-                final l = filteredLessons[i];
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LessonDetailPage(
-                          lesson: l,
-                          categoryRepo: widget.categoryRepo,
-                          fieldDefs: fieldDefs,
+            const SizedBox(height: 6),
+
+            // ===== DAYS STRIP =====
+            buildWeekStrip(),
+
+            const SizedBox(height: 10),
+
+            // ===== STATUS BAR =====
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.all(8),
+                child: LinearProgressIndicator(),
+              ),
+
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  "Ошибка: $error",
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+
+            // ===== LESSONS LIST =====
+            Expanded(
+              child: filteredLessons.isEmpty
+                  ? const Center(child: Text("Нет занятий"))
+                  : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: filteredLessons.length,
+                itemBuilder: (context, i) {
+                  final l = filteredLessons[i];
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LessonDetailPage(
+                            lesson: l,
+                            categoryRepo: widget.categoryRepo,
+                            fieldDefs: fieldDefs,
+                          ),
                         ),
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 30,
-                          child: Center(
-                            child: Text(
-                              getLessonNumber(l.beginTime),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 30,
+                            child: Center(
+                              child: Text(
+                                getLessonNumber(l.beginTime),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: l.lessonType.color, // мягкий цвет
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      l.lessonType.displayName, // без const!
-                                      style: const TextStyle(
-                                        color: Color(0xFFFFFFFF), // белый текст
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: l.lessonType.color,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        l.lessonType.displayName,
+                                        style: const TextStyle(
+                                          color: Color(0xFFFFFFFF),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
-                                        "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1565C0), // тёмно-синий
-                                      fontSize: 13,
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "${l.beginTime.hour.toString().padLeft(2, '0')}:${l.beginTime.minute.toString().padLeft(2, '0')} - "
+                                          "${l.endTime.hour.toString().padLeft(2, '0')}:${l.endTime.minute.toString().padLeft(2, '0')}",
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1565C0),
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                l.title,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Ауд. ${l.room}",
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 13,
+                                  ],
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  l.title,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Ауд. ${l.room}",
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-
-        floatingActionButton: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (fabOpen) ...[
-              FloatingActionButton.small(
-                heroTag: "fabBlacklist",
-                onPressed: () {
-                  setState(() {
-                    showBlacklisted = !showBlacklisted;
-                  });
-                  updateFilteredLessons();
+                  );
                 },
-                child: Icon(
-                  showBlacklisted ? Icons.visibility : Icons.visibility_off,
-                ),
               ),
-              const SizedBox(height: 8),
-
-              FloatingActionButton.small(
-                heroTag: "fabSync",
-                onPressed: refreshWeek,
-                child: const Icon(Icons.sync),
-              ),
-              const SizedBox(height: 8),
-            ],
-
-            FloatingActionButton(
-              heroTag: "fabMore",
-              onPressed: () {
-                setState(() {
-                  fabOpen = !fabOpen;
-                });
-              },
-              child: Icon(fabOpen ? Icons.close : Icons.more_vert),
             ),
           ],
         ),
+      ),
+
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (fabOpen) ...[
+            FloatingActionButton.small(
+              heroTag: "fabBlacklist",
+              onPressed: () {
+                setState(() {
+                  showBlacklisted = !showBlacklisted;
+                });
+                updateFilteredLessons();
+              },
+              child: Icon(
+                showBlacklisted ? Icons.visibility : Icons.visibility_off,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            FloatingActionButton.small(
+              heroTag: "fabSync",
+              onPressed: refreshWeek,
+              child: const Icon(Icons.sync),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          FloatingActionButton(
+            heroTag: "fabMore",
+            onPressed: () {
+              setState(() {
+                fabOpen = !fabOpen;
+              });
+            },
+            child: Icon(fabOpen ? Icons.close : Icons.more_vert),
+          ),
+        ],
+      ),
     );
   }
 

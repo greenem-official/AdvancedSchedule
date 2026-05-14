@@ -8,7 +8,7 @@ class ScheduleApi {
   static const baseUrl = 'https://ruz.fa.ru/api';
 
   DateTime? _lastRequest;
-  final Duration minInterval = const Duration(seconds: 2);
+  final Duration minInterval = const Duration(milliseconds: 50);
 
   Future<List<Lesson>> fetchLessons({
     required String groupId,

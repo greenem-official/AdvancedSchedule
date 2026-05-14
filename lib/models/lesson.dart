@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter7/data/constants.dart';
 
 class LessonType {
@@ -97,7 +98,14 @@ class Lesson {
     // room
     room = raw['auditorium']?.toString() ?? '—';
 
-    lessonType = lessonTypeMapById[raw['kindOfWorkOid']]!;
+    final typeOid = raw['kindOfWorkOid'];
+    lessonType = lessonTypeMapById[typeOid] ?? LessonType(
+      internalName: "unknown_$typeOid",
+      displayName: raw['kindOfWork'] ?? "Неизвестно",
+      typeOid: typeOid ?? -1,
+      color: const Color(0xFF9E9E9E), // серый для неизвестных
+    );
+    // if(lessonType.displayName.startsWith("unknown")) debugPrint("Unknown lesson type $typeOid");
   }
 
   Map<String, dynamic> toJson() => {

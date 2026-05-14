@@ -96,6 +96,11 @@ const List<LessonType> lessonTypes = [
     typeOid: 158,
     color: Color(0xFFFFA726), // такой же мягкий оранжевый
   ),
+  LessonType(
+      internalName: "pre-exam",
+      displayName: "Консультация перед экзаменом",
+      typeOid: 125,
+      color: Color(0xFFC4B8C6))
 ];
 
 final Map<int, LessonType> lessonTypeMapById = {

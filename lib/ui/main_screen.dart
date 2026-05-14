@@ -36,7 +36,7 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          // ✅ SchedulePageContent теперь переиспользуемый
+          // SchedulePageContent теперь переиспользуемый
           SchedulePageContent(
             repo: repo,
             categoryRepo: categoryRepo,
