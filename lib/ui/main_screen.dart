@@ -45,10 +45,10 @@ class _MainScreenState extends State<MainScreen> {
           ),
           CategoriesPage(categoryRepo: categoryRepo),
           SettingsPage(
-            // groupId: currentGroupId,
-            // onGroupChanged: (newGroupId) {
-            //   setState(() => currentGroupId = newGroupId);
-            // },
+            groupId: currentGroupId,
+            onGroupChanged: (newGroupId) {
+              setState(() => currentGroupId = newGroupId);
+            },
           ),
         ],
       ),
