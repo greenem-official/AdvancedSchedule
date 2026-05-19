@@ -43,14 +43,22 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
   DateTime get weekStart => selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
   List<DateTime> get weekDays => List.generate(7, (i) => weekStart.add(Duration(days: i)));
 
+  Map<String, int> lessonsCountByDay = {}; // кеш количества занятий по дням
+  Set<String> loadedDays = {}; // дни, которые уже загружались
+  Set<String> loadingDays = {}; // дни, которые сейчас загружаются
+
   bool showBlacklisted = false;
   bool fabOpen = false;
 
   @override
   void initState() {
     super.initState();
-    // cacheManager = SmartCacheManager(repo: widget.repo);
     loadDay(selectedDate);
+
+    // Фоновая загрузка всей недели без спиннеров
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _preloadWeekDays(selectedDate, showIndicators: false);
+    });
   }
 
   @override
@@ -75,16 +83,28 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     });
 
     try {
-      // один вызов с force=true
       await widget.repo.getDay(
         groupId: groupId,
         date: selectedDate,
         refresh: true,
       );
 
+      // Очищаем кеш счётчиков для этой недели
+      final ws = weekStart;
+      for (int i = 0; i < 7; i++) {
+        final day = ws.add(Duration(days: i));
+        final dayKey = day.toIso8601String().substring(0, 10);
+        loadedDays.remove(dayKey);
+        lessonsCountByDay.remove(dayKey);
+      }
+
       await loadDay(selectedDate);
+
+      // Показываем индикаторы при ручном обновлении
+      await _preloadWeekDays(selectedDate, showIndicators: true);
+
     } catch (e, stack) {
-      debugPrint("Ошибка обновления: $e\n$stack");
+      debugPrint("Ошибка обновления недели: $e\n$stack");
       setState(() => error = e.toString());
     } finally {
       setState(() => loading = false);
@@ -97,11 +117,9 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     setState(() {
       loading = true;
       error = null;
-      selectedDate = day; // сразу обновляем дату
     });
 
     try {
-      // один вызов, который сам решит нужна ли загрузка
       final data = await widget.repo.getDay(
         groupId: groupId,
         date: day,
@@ -110,23 +128,28 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
       if (!mounted) return;
 
+      final dayKey = day.toIso8601String().substring(0, 10);
+
       setState(() {
         lessons = data;
+        selectedDate = day;
+        loadedDays.add(dayKey);
+
+        if (data.isNotEmpty) {
+          lessonsCountByDay[dayKey] = data.length;
+        } else {
+          lessonsCountByDay.remove(dayKey);
+        }
       });
 
       await updateFilteredLessons();
 
-    } catch (e, stack) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() {
-        debugPrint("Ошибка загрузки дня: $e\n$stack");
-        error = e.toString();
-      });
+      setState(() => error = e.toString());
     } finally {
       if (!mounted) return;
-      setState(() {
-        loading = false;
-      });
+      setState(() => loading = false);
     }
   }
 
@@ -135,9 +158,62 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
     loadDay(newDate);
   }
 
+  // Замените существующий changeWeek
   void changeWeek(int offset) {
     final newDate = selectedDate.add(Duration(days: offset * 7));
-    loadDay(newDate);
+    setState(() {
+      selectedDate = newDate;
+    });
+
+    loadDay(selectedDate);
+
+    // Фоновая загрузка без индикаторов
+    _preloadWeekDays(selectedDate, showIndicators: false);
+  }
+
+  Future<void> _preloadWeekDays(DateTime date, {bool showIndicators = true}) async {
+    final ws = DateTime(date.year, date.month, date.day - (date.weekday - 1));
+
+    for (int i = 0; i < 7; i++) {
+      final day = ws.add(Duration(days: i));
+      final dayKey = day.toIso8601String().substring(0, 10);
+
+      // Пропускаем уже загруженные и загружающиеся
+      if (loadedDays.contains(dayKey) || loadingDays.contains(dayKey)) {
+        continue;
+      }
+
+      // Если не показываем индикаторы - не добавляем в loadingDays
+      if (showIndicators) {
+        loadingDays.add(dayKey);
+      }
+
+      try {
+        final data = await widget.repo.getDay(
+          groupId: groupId,
+          date: day,
+          refresh: false,
+        );
+
+        if (!mounted) return;
+
+        setState(() {
+          loadedDays.add(dayKey);
+          if (data.isNotEmpty) {
+            lessonsCountByDay[dayKey] = data.length;
+          } else {
+            lessonsCountByDay.remove(dayKey);
+          }
+        });
+      } catch (e) {
+        // Тихо игнорируем ошибки фоновой загрузки
+        debugPrint("Фоновая загрузка $dayKey не удалась: $e");
+      } finally {
+        if (showIndicators) {
+          loadingDays.remove(dayKey);
+        }
+      }
+    }
   }
 
   Future<void> pickDate() async {
@@ -469,36 +545,52 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
               children: List.generate(7, (index) {
                 final date = weekDays[index];
                 final active = isSameDay(date, selectedDate);
+                final dayKey = date.toIso8601String().substring(0, 10);
+                final isLoading = loadingDays.contains(dayKey);
+                final isLoaded = loadedDays.contains(dayKey);
+                final count = lessonsCountByDay[dayKey];
 
                 return Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      selectedDate = date;
+                      setState(() => selectedDate = date);
                       loadDay(date);
                     },
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 3),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
                       decoration: BoxDecoration(
-                        color: active ? Colors.blue.shade100 : Colors.white,
+                        color: active
+                            ? Colors.blue.shade100
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: active ? Colors.blue : Colors.grey.shade300,
+                          color: active
+                              ? Colors.blue
+                              : Colors.grey.shade300,
                         ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][index],
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          Text(
-                            "${date.day}",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][index],
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            Text(
+                              "${date.day}",
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+
+                            SizedBox(
+                              height: 8, // фиксированная высота
+                              child: _buildDotIndicator(
+                                dayKey: date.toIso8601String().substring(0, 10),
+                                active: active,
+                              ),
+                            ),
+                          ],
+                        )
                     ),
                   ),
                 );
@@ -507,6 +599,57 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDotIndicator({
+    required String dayKey,
+    required bool active,
+  }) {
+    final count = lessonsCountByDay[dayKey];
+    final isLoading = loadingDays.contains(dayKey);
+    final isLoaded = loadedDays.contains(dayKey);
+
+    // Загружается (только если явно в loadingDays)
+    if (isLoading) {
+      return Center(
+        child: SizedBox(
+          width: 10,
+          height: 10,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              active ? Colors.blue : Colors.grey.shade400,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Ещё не загружался
+    if (!isLoaded) {
+      return const SizedBox.shrink();
+    }
+
+    // Нет занятий
+    if (count == null || count == 0) {
+      return const SizedBox.shrink();
+    }
+
+    // Есть занятия - показываем точки
+    final dots = count > 3 ? 3 : count;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(dots, (i) => Container(
+        width: 4,
+        height: 4,
+        margin: const EdgeInsets.symmetric(horizontal: 1),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: active ? Colors.blue : Colors.grey.shade500,
+        ),
+      )),
     );
   }
 }
