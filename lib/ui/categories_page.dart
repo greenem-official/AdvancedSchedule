@@ -55,30 +55,199 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
+  void _selectCategory(Category c) async {
+    selectedCategory = c;
+    await loadRules();
+
+    // На мобильных закрываем drawer после выбора
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final grouped = groupRulesByField(rules);
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 850;
+
+        if (isMobile) {
+          return _buildMobileLayout(grouped);
+        } else {
+          return _buildDesktopLayout(grouped);
+        }
+      },
+    );
+  }
+
+  // ================= MOBILE LAYOUT =================
+
+  Widget _buildMobileLayout(Map<String, List<CategoryRule>> grouped) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(selectedCategory?.title ?? "Категории"),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+        actions: [
+          if (selectedCategory != null)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: "Добавить правило",
+              onPressed: () {
+                // TODO: добавить правило
+              },
+            ),
+        ],
+      ),
+      drawer: _buildDrawer(),
+      body: _content(grouped),
+    );
+  }
+
+  // ================= DESKTOP LAYOUT =================
+
+  Widget _buildDesktopLayout(Map<String, List<CategoryRule>> grouped) {
     return Scaffold(
       appBar: AppBar(title: const Text("Категории и правила")),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isMobile = constraints.maxWidth < 850;
-
-          return Row(
-            children: [
-              if (!isMobile) _sidebar(),
-              Expanded(child: _content(grouped)),
-            ],
-          );
-        },
+      body: Row(
+        children: [
+          _buildSidebar(),
+          Expanded(child: _content(grouped)),
+        ],
       ),
     );
   }
 
-  // ================= SIDEBAR =================
+  // ================= DRAWER (mobile) =================
 
-  Widget _sidebar() {
+  Widget _buildDrawer() {
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Заголовок drawer
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+              child: Row(
+                children: [
+                  const Text(
+                    "Категории",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    tooltip: "Добавить категорию",
+                    onPressed: _addCategoryPlaceholder,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            // Список категорий
+            Expanded(
+              child: ReorderableListView.builder(
+                buildDefaultDragHandles: false,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                itemCount: categories.length,
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex--;
+                    final item = categories.removeAt(oldIndex);
+                    categories.insert(newIndex, item);
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final c = categories[index];
+                  final selected = selectedCategory?.id == c.id;
+
+                  return Material(
+                    key: ValueKey(c.id),
+                    color: selected
+                        ? Theme.of(context)
+                        .colorScheme
+                        .primaryContainer
+                        .withOpacity(0.55)
+                        : Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _selectCategory(c),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            ReorderableDragStartListener(
+                              index: index,
+                              child: Icon(
+                                Icons.drag_indicator,
+                                size: 18,
+                                color: Colors.grey.withOpacity(0.6),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.folder_outlined, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                c.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 18),
+                              onSelected: (value) {
+                                if (value == "edit") {
+                                  _editCategoryPlaceholder(c);
+                                } else if (value == "delete") {
+                                  _deleteCategoryPlaceholder(c);
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: "edit",
+                                  child: Text("Редактировать"),
+                                ),
+                                PopupMenuItem(
+                                  value: "delete",
+                                  child: Text("Удалить"),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= SIDEBAR (desktop) =================
+
+  Widget _buildSidebar() {
     return Container(
       width: 260,
       decoration: BoxDecoration(
@@ -121,8 +290,6 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   final item = categories.removeAt(oldIndex);
                   categories.insert(newIndex, item);
                 });
-
-                // TODO: сохранить порядок в repo
               },
               itemBuilder: (context, index) {
                 final c = categories[index];
@@ -137,10 +304,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                       .withOpacity(0.55)
                       : Colors.transparent,
                   child: InkWell(
-                    onTap: () async {
-                      selectedCategory = c;
-                      await loadRules();
-                    },
+                    onTap: () => _selectCategory(c),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
