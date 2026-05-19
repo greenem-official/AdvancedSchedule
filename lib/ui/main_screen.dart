@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter7/api/api_client.dart';
 import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/repository.dart';
 import 'package:flutter7/ui/categories_page.dart';
@@ -42,6 +43,7 @@ class _MainScreenState extends State<MainScreen> {
             categoryRepo: categoryRepo,
             groupId: currentGroupId,
             title: "Расписание группы $currentGroupId",
+            scheduleType: ScheduleType.group,
           ),
           CategoriesPage(categoryRepo: categoryRepo),
           SettingsPage(

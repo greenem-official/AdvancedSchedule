@@ -169,6 +169,7 @@ class _TeacherSearchPageState extends State<TeacherSearchPage> {
                               categoryRepo: catRepo,
                               groupId: teacher['id']!,
                               showAppBar: false,
+                              scheduleType: ScheduleType.person,
                             ),
                           ),
                         ),

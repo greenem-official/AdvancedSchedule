@@ -12,108 +12,132 @@ class ScheduleRepository {
 
   // защита от повторных запросов
   String? _lastFetchedRange;
-  final Map<String, Future<void>> _pendingRangeFetches = {};
+  final Map<String, Future<List<Lesson>>> _pendingRequests = {};
 
   /// Загружает уроки за конкретный день (из кеша или API)
   Future<List<Lesson>> getDay({
-    required String groupId,
+    required String id,
     required DateTime date,
     required bool refresh,
+    ScheduleType type = ScheduleType.group,
   }) async {
-    final cache = await storage.load(groupId);
-    final key = _key(date);
+    final key = date.toIso8601String().substring(0, 10);
+    final requestKey = '$id-${type.name}-$key-$refresh';
+
+    if (_pendingRequests.containsKey(requestKey)) {
+      return _pendingRequests[requestKey]!;
+    }
+
+    final future = _getDayInternal(
+      id: id,
+      date: date,
+      refresh: refresh,
+      dayKey: key,
+      type: type,
+    );
+
+    _pendingRequests[requestKey] = future;
+
+    try {
+      final result = await future;
+      return result;
+    } finally {
+      _pendingRequests.remove(requestKey);
+    }
+  }
+
+  Future<List<Lesson>> _getDayInternal({
+    required String id,
+    required DateTime date,
+    required bool refresh,
+    required String dayKey,
+    required ScheduleType type,
+  }) async {
+    final cache = await storage.load(id);
+    final key = date.toIso8601String().substring(0, 10);
 
     bool needFetch = refresh || cache == null;
 
     if (!needFetch && cache != null) {
       final inRange =
-          !date.isBefore(cache.start) &&
-              !date.isAfter(cache.end);
+          !date.isBefore(cache.start) && !date.isAfter(cache.end);
+
       needFetch = !inRange;
     }
 
     if (needFetch) {
-      // загружаем большой диапазон
-      await fetchRange(
-        groupId: groupId,
-        center: date,
-        force: refresh,
+      final start = _normalizeDate(date.subtract(const Duration(days: 3)));
+      final end = _normalizeDate(date.add(const Duration(days: 3)));
+
+      debugPrint("Fetch range: $start - $end (refresh=$refresh, type=${type.name})");
+
+      final lessons = await api.fetchLessons(
+        id: id,
+        start: start,
+        end: end,
+        type: type,
       );
+
+      final days = <String, List<Lesson>>{};
+
+      for (final l in lessons) {
+        final d = _key(l.date);
+        days.putIfAbsent(d, () => []).add(l);
+      }
+
+      final newCache = ScheduleCache(
+        groupId: id,
+        lastUpdated: DateTime.now(),
+        start: start,
+        end: end,
+        days: days,
+      );
+
+      await storage.save(newCache);
     }
 
-    final newCache = await storage.load(groupId);
+    final newCache = await storage.load(id);
     return newCache?.days[key] ?? [];
   }
 
-  /// Загружает диапазон дней ±halfRange вокруг center
-  Future<void> fetchRange({
+  // Для обратной совместимости
+  Future<List<Lesson>> getDayForGroup({
     required String groupId,
-    required DateTime center,
-    int halfRange = 14, // было 7, теперь ±14 дней = 29 дней всего
-    bool force = false,
+    required DateTime date,
+    required bool refresh,
   }) async {
-    final start = _normalizeDate(center.subtract(Duration(days: halfRange)));
-    final end = _normalizeDate(center.add(Duration(days: halfRange)));
-
-    final rangeKey = '$start-$end';
-
-    // если такой диапазон уже грузится - ждём
-    if (_pendingRangeFetches.containsKey(rangeKey)) {
-      debugPrint("⏳ Range $rangeKey already loading, waiting...");
-      await _pendingRangeFetches[rangeKey]!;
-      return;
-    }
-
-    // если уже загружали этот диапазон и не force - пропускаем
-    if (!force && _lastFetchedRange == rangeKey) {
-      debugPrint("Range $rangeKey already fetched");
-      return;
-    }
-
-    final future = _doFetchRange(groupId: groupId, start: start, end: end);
-    _pendingRangeFetches[rangeKey] = future;
-
-    try {
-      await future;
-      _lastFetchedRange = rangeKey;
-    } finally {
-      _pendingRangeFetches.remove(rangeKey);
-    }
+    return getDay(
+      id: groupId,
+      date: date,
+      refresh: refresh,
+      type: ScheduleType.group,
+    );
   }
 
-  Future<void> _doFetchRange({
-    required String groupId,
+  Future<void> getLessonsForRange({
+    required String id,
     required DateTime start,
     required DateTime end,
+    ScheduleType type = ScheduleType.group,
   }) async {
-    debugPrint("📦 Fetch range: $start - $end");
+    debugPrint("Fetching range: $start - $end (type=${type.name})");
 
     final lessons = await api.fetchLessons(
-      groupId: groupId,
+      id: id,
       start: start,
       end: end,
+      type: type,
     );
 
-    // Группируем по дням
     final days = <String, List<Lesson>>{};
+
     for (final l in lessons) {
       final d = _key(l.date);
       days.putIfAbsent(d, () => []).add(l);
     }
 
-    // объединяем с существующим кешем, а не перезаписываем
-    final existingCache = await storage.load(groupId);
-    if (existingCache != null) {
-      // Добавляем старые дни, которых нет в новой загрузке
-      for (final entry in existingCache.days.entries) {
-        if (!days.containsKey(entry.key)) {
-          days[entry.key] = entry.value;
-        }
-      }
-    }
-
     final newCache = ScheduleCache(
-      groupId: groupId,
+      groupId: id,
       lastUpdated: DateTime.now(),
       start: start,
       end: end,
@@ -121,92 +145,10 @@ class ScheduleRepository {
     );
 
     await storage.save(newCache);
-    debugPrint("💾 Cache saved: ${days.length} days, ${lessons.length} lessons");
-
-    // очищаем старые дни в фоне
-    Future.microtask(() async {
-      await cleanupCache(
-        groupId: groupId,
-        center: start.add(Duration(days: (end.difference(start).inDays / 2).round())),
-      );
-    });
   }
 
   String _key(DateTime d) => d.toIso8601String().substring(0, 10);
 
   DateTime _normalizeDate(DateTime d) =>
       DateTime(d.year, d.month, d.day);
-
-  Future<void> cleanupCache({
-    required String groupId,
-    required DateTime center,
-  }) async {
-    final cache = await storage.load(groupId);
-    if (cache == null) return;
-
-    final days = Map<String, List<Lesson>>.from(cache.days);
-    final entries = days.entries.toList();
-
-    // Сортируем: сначала самые далёкие от centre
-    entries.sort((a, b) {
-      final dateA = DateTime.tryParse(a.key) ?? DateTime(2000);
-      final dateB = DateTime.tryParse(b.key) ?? DateTime(2000);
-      final diffA = dateA.difference(center).abs();
-      final diffB = dateB.difference(center).abs();
-      return diffB.compareTo(diffA); // дальние сверху
-    });
-
-    int kept = 0;
-    final toKeep = <String, List<Lesson>>{};
-    final now = DateTime.now();
-
-    for (final entry in entries) {
-      final date = DateTime.tryParse(entry.key);
-      if (date == null) continue;
-
-      // Всегда сохраняем дни в защищённом радиусе
-      if (date.difference(center).inDays.abs() <= CachePolicy.protectedRadius) {
-        toKeep[entry.key] = entry.value;
-        kept++;
-        continue;
-      }
-
-      // Всегда сохраняем будущие дни в пределах keepFutureDays
-      if (date.isAfter(now) &&
-          date.difference(now).inDays <= CachePolicy.keepFutureDays) {
-        toKeep[entry.key] = entry.value;
-        kept++;
-        continue;
-      }
-
-      // Всегда сохраняем недавние прошлые дни
-      if (date.isBefore(now) &&
-          now.difference(date).inDays <= CachePolicy.keepPastDays) {
-        toKeep[entry.key] = entry.value;
-        kept++;
-        continue;
-      }
-
-      // Остальное сохраняем пока не превысили лимит
-      if (kept < CachePolicy.maxCachedDays) {
-        toKeep[entry.key] = entry.value;
-        kept++;
-      }
-    }
-
-    final removed = days.length - toKeep.length;
-    if (removed > 0) {
-      debugPrint("🧹 Cleanup: removed $removed days, kept ${toKeep.length}");
-
-      final cleanedCache = ScheduleCache(
-        groupId: cache.groupId,
-        lastUpdated: cache.lastUpdated,
-        start: cache.start,
-        end: cache.end,
-        days: toKeep,
-      );
-
-      await storage.save(cleanedCache);
-    }
-  }
 }

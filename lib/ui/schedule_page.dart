@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter7/api/api_client.dart';
 import 'package:flutter7/data/blacklist/category_engine.dart';
 import 'package:flutter7/data/blacklist/category_repository.dart';
 import 'package:flutter7/data/blacklist/categories.dart';
@@ -14,6 +15,7 @@ class SchedulePageContent extends StatefulWidget {
   final String groupId; // передаём извне
   final String? title; // опциональный заголовок
   final bool showAppBar; // для встраивания без AppBar
+  final ScheduleType scheduleType;
 
   const SchedulePageContent({
     super.key,
@@ -22,6 +24,7 @@ class SchedulePageContent extends StatefulWidget {
     required this.groupId,
     this.title,
     this.showAppBar = true,
+    this.scheduleType = ScheduleType.group,
   });
 
   @override
@@ -84,9 +87,10 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
     try {
       await widget.repo.getDay(
-        groupId: groupId,
+        id: groupId,
         date: selectedDate,
         refresh: true,
+        type: widget.scheduleType,
       );
 
       // Очищаем кеш счётчиков для этой недели
@@ -121,9 +125,10 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
     try {
       final data = await widget.repo.getDay(
-        groupId: groupId,
+        id: groupId,
         date: day,
         refresh: false,
+        type: widget.scheduleType,
       );
 
       if (!mounted) return;
@@ -190,9 +195,10 @@ class _SchedulePageContentState extends State<SchedulePageContent> {
 
       try {
         final data = await widget.repo.getDay(
-          groupId: groupId,
+          id: groupId,
           date: day,
           refresh: false,
+          type: widget.scheduleType,
         );
 
         if (!mounted) return;
